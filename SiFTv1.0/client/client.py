@@ -201,13 +201,17 @@ if __name__ == '__main__':
     mtp = SiFT_MTP(sckt)
     loginp = SiFT_LOGIN(mtp)
 
+    public_key = None
+    with open("pubkey.pem", 'rb') as file:
+        public_key = file.read()
+
     print()
     username = input('   Username: ')
     password = getpass.getpass('   Password: ')
     print()
 
     try:
-        loginp.handle_login_client(username, password)
+        loginp.handle_login_client(username, password, public_key)
     except SiFT_LOGIN_Error as e:
         print('SiFT_LOGIN_Error: ' + e.err_msg)
         sys.exit(1)

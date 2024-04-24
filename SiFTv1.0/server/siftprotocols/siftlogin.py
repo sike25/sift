@@ -70,7 +70,7 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the server)
-    def handle_login_server(self):
+    def handle_login_server(self, pubkey, privkey):
 
         if not self.server_users:
             raise SiFT_LOGIN_Error('User database is required for handling login at server')
@@ -132,7 +132,7 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the client)
-    def handle_login_client(self, username, password):
+    def handle_login_client(self, username, password, pubkey):
 
         # building a login request
         login_req_struct = {}

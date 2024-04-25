@@ -15,10 +15,11 @@ class SiFT_LOGIN:
     def __init__(self, mtp):
 
         self.DEBUG = True
-        # --------- CONSTANTS ------------
+        # constants
         self.delimiter = '\n'
         self.coding = 'utf-8'
-        # --------- STATE ------------
+
+        # state
         self.mtp = mtp
         self.server_users = None 
 
@@ -70,6 +71,7 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the server)
+    # TODO: Use the keys
     def handle_login_server(self, pubkey, privkey):
 
         if not self.server_users:
@@ -132,6 +134,7 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the client)
+    # TODO: use the key?
     def handle_login_client(self, username, password, pubkey):
 
         # building a login request

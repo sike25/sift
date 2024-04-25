@@ -19,6 +19,7 @@ class SiFT_LOGIN:
         # constants
         self.delimiter = '\n'
         self.coding = 'utf-8'
+        self.acceptance_window = 2 #seconds
 
         # state
         self.mtp = mtp
@@ -56,20 +57,21 @@ class SiFT_LOGIN:
 
         return login_req_struct
 
+    #MODIFIED from v .5
     # builds a login response from a dictionary
     def build_login_res(self, login_res_struct):
-
-        login_res_str = login_res_struct['request_hash'].hex() 
+        server_random = secrets.token_hex(16)
+        login_res_str = f"{login_res_struct['request_hash'].hex()}{self.delimiter}{server_random}"
         return login_res_str.encode(self.coding)
 
-
+    #MODIFIED from v .5
     # parses a login response into a dictionary
     def parse_login_res(self, login_res):
         login_res_fields = login_res.decode(self.coding).split(self.delimiter)
         login_res_struct = {}
         login_res_struct['request_hash'] = bytes.fromhex(login_res_fields[0])
+        login_res_struct['server_random'] = login_res_fields[1]
         return login_res_struct
-
 
     # check correctness of a provided password
     def check_password(self, pwd, usr_struct):
@@ -78,6 +80,11 @@ class SiFT_LOGIN:
         if pwdhash == usr_struct['pwdhash']: return True
         return False
 
+    #To be implemented hopefully...
+    def is_duplicate_request(self, login_req_timestamp):
+        #To check if the same request was received in another connection (with another client) within the acceptance window
+        #Returns boolean
+        pass
 
     # handles login process (to be used by the server)
     # TODO: Use the keys
@@ -108,6 +115,19 @@ class SiFT_LOGIN:
         request_hash = hash_fn.digest()
 
         login_req_struct = self.parse_login_req(msg_payload)
+
+        #NEW in v 1.0 comparing login req timestamp to current system time
+        current_time = time.time()  # Get current system time as a floating-point number
+        login_req_timestamp = login_req_struct['timestamp'] / 1_000_000_000  # Convert nanoseconds to seconds
+
+        # Check if timestamp is within the acceptance window
+        if abs(current_time - login_req_timestamp) > self.acceptance_window:
+            raise SiFT_LOGIN_Error('Login request not fresh')
+
+        # Check if the same request was not received within the acceptance window
+        if self.is_duplicate_request(login_req_timestamp):
+            raise SiFT_LOGIN_Error('Duplicate login request')
+        
 
         # checking username and password
         if login_req_struct['username'] in self.server_users:

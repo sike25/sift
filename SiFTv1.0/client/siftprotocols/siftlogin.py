@@ -1,6 +1,7 @@
 #python3
 
 import time
+import secrets
 from Crypto.Hash import SHA256
 from Crypto.Protocol.KDF import PBKDF2
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
@@ -29,23 +30,31 @@ class SiFT_LOGIN:
         self.server_users = users
 
 
+    #MODIFIED FROM ver .5 
     # builds a login request from a dictionary
     def build_login_req(self, login_req_struct):
+        timestamp = str(int(time.time_ns()))
+        client_random = secrets.token_hex(16)
+        
+        login_req_str = f"{timestamp}{self.delimiter}"
+        login_req_str += f"{login_req_struct['username']}{self.delimiter}"
+        login_req_str += f"{login_req_struct['password']}{self.delimiter}"
+        login_req_str += client_random
 
-        login_req_str = login_req_struct['username']
-        login_req_str += self.delimiter + login_req_struct['password'] 
         return login_req_str.encode(self.coding)
 
-
+    #MODIFIED FROM ver .5 
     # parses a login request into a dictionary
     def parse_login_req(self, login_req):
-
         login_req_fields = login_req.decode(self.coding).split(self.delimiter)
+        
         login_req_struct = {}
-        login_req_struct['username'] = login_req_fields[0]
-        login_req_struct['password'] = login_req_fields[1]
-        return login_req_struct
+        login_req_struct['timestamp'] = int(login_req_fields[0])
+        login_req_struct['username'] = login_req_fields[1]
+        login_req_struct['password'] = login_req_fields[2]
+        login_req_struct['client_random'] = login_req_fields[3]
 
+        return login_req_struct
 
     # builds a login response from a dictionary
     def build_login_res(self, login_res_struct):

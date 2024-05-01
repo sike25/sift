@@ -2,7 +2,9 @@
 
 import time
 import secrets
+
 from Crypto.Hash import SHA256
+from Crypto.Protocol.KDF import HKDF
 from Crypto.Protocol.KDF import PBKDF2
 from siftprotocols.siftmtp import SiFT_MTP, SiFT_MTP_Error
 
@@ -25,6 +27,11 @@ class SiFT_LOGIN:
         self.mtp = mtp
         self.server_users = None 
 
+        # key derivation pieces
+        self.client_random = None
+        self.server_random = None
+        self.request_hash = None
+
 
     # sets user passwords dictionary (to be used by the server)
     def set_server_users(self, users):
@@ -42,6 +49,7 @@ class SiFT_LOGIN:
         login_req_str += f"{login_req_struct['password']}{self.delimiter}"
         login_req_str += client_random
 
+        self.client_random = bytes.fromhex(client_random)
         return login_req_str.encode(self.coding)
 
     # MODIFIED FROM ver .5 
@@ -55,6 +63,7 @@ class SiFT_LOGIN:
         login_req_struct['password'] = login_req_fields[2]
         login_req_struct['client_random'] = login_req_fields[3]
 
+        self.client_random = bytes.fromhex(login_req_struct['client_random'])
         return login_req_struct
 
     # MODIFIED from v .5
@@ -62,6 +71,9 @@ class SiFT_LOGIN:
     def build_login_res(self, login_res_struct):
         server_random = secrets.token_hex(16)
         login_res_str = f"{login_res_struct['request_hash'].hex()}{self.delimiter}{server_random}"
+
+        self.server_random = bytes.fromhex(server_random)
+        self.request_hash = login_res_struct['request_hash']
         return login_res_str.encode(self.coding)
 
     # MODIFIED from v .5
@@ -71,6 +83,9 @@ class SiFT_LOGIN:
         login_res_struct = {}
         login_res_struct['request_hash'] = bytes.fromhex(login_res_fields[0])
         login_res_struct['server_random'] = login_res_fields[1]
+
+        self.server_random = bytes.fromhex(login_res_struct['server_random'])
+        self.request_hash = login_res_struct['request_hash']
         return login_res_struct
 
     # check correctness of a provided password
@@ -159,6 +174,12 @@ class SiFT_LOGIN:
             print('User ' + login_req_struct['username'] + ' logged in')
         # DEBUG 
 
+        # after all successful verification...
+        if self.client_random and self.server_random and self.request_hash:
+            self.final_key_derivation()
+        else:
+            raise SiFT_LOGIN_Error('Insufficient material for final key derivation')
+
         return login_req_struct['username']
 
 
@@ -215,3 +236,21 @@ class SiFT_LOGIN:
         # checking request_hash receiveid in the login response
         if login_res_struct['request_hash'] != request_hash:
             raise SiFT_LOGIN_Error('Verification of login response failed')
+        
+        # after all successful verification...
+        if self.client_random and self.server_random and self.request_hash:
+            self.final_key_derivation()
+        else:
+            raise SiFT_LOGIN_Error('Insufficient material for final key derivation')
+
+
+    # compute a 32-byte final transfer key for the MTP protocol
+    def final_key_derivation(self):
+        session_key = HKDF(
+            master = self.client_random + self.server_random,
+            key_len = 32,
+            salt = self.request_hash,
+            hashmod = SHA256,
+        )
+
+        self.mtp.update_key(session_key)

@@ -53,7 +53,7 @@ class SiFT_MTP:
 		self.received_sequence_number = 0
 		self.sent_sequence_number = 0
 
-		self.key = b'7\x0eh,\xdc\xbb\xf1\xa11\xdf_H.W\xae\xb5'
+		self.key = None
 
 
 	# updates session key
@@ -204,10 +204,13 @@ class SiFT_MTP:
 		private_key = RSA.import_key(private_key_data) # load the private RSA key
 		cipher = PKCS1_OAEP.new(private_key)
 		temporary_key = cipher.decrypt(etk)
+
+		# set session key to the temporary login key for now
+		self.key = temporary_key 
 		
 		# decrypt and authenticate the message with the etk
 		try:
-			cipher = AES.new(key = temporary_key, mode = AES.MODE_GCM, nonce = nonce)
+			cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce)
 			cipher.update(msg_hdr)
 			msg_body = cipher.decrypt_and_verify(msg_body, received_mac)
 		except SiFT_MTP_Error as e:
@@ -250,7 +253,7 @@ class SiFT_MTP:
 		nonce =  msg_hdr_sqn + msg_hdr_rnd
 
 		# encrypt and compute the mac
-		cipher = AES.new(self.key, AES.MODE_GCM, nonce = nonce)
+		cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce)
 		cipher.update(msg_hdr)
 		ciphertext, mac = cipher.encrypt_and_digest(msg_payload)
 

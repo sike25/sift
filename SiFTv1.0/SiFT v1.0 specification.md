@@ -205,8 +205,6 @@ The client should input the username and the password from the user to fill in t
 Once the login request is sent, the client should compute the SHA-256 hash of the payload of the login request (converted to a byte string) and store it for the purpose of later verifications.
 
 When the server receives the login request message, it should check the received timestamp by comparing it to its current system time. The timestamp must fall in an acceptance window around the current time of the server for the login request to be accepted. The size of the acceptance window should be configurable to account for network delays. A recommended value is 2 seconds, which means that the received timestamp must not be considered fresh by the server if it is smaller than the current time minus 1 second or larger than the current time plus 1 second. Preferably, the server should also check if the same request was not recieved in another connection (with another client) within the acceptance time window around the current time at the server.
- 
-!!!!!!Zehra's Note: So far, up until this point of the login protocol is implemented. (but not tested yet)!!!!!
 
 Then the server must check the username and password received, by computing the password hash of the password and comparing it to the password hash stored by the server for the given username. It is not part of this specification to define which password hash function the server should use and how; this is left for implementations. It is recommended, however, to follow best practices in this matter, which means that a secure password hash function, such as PBKDF2, scrypt, or Argon2, should be used with appropriate streching and salting parameters.
 

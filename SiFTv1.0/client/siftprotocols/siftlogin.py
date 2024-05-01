@@ -31,7 +31,7 @@ class SiFT_LOGIN:
         self.server_users = users
 
 
-    #MODIFIED FROM ver .5 
+    # MODIFIED FROM ver .5 
     # builds a login request from a dictionary
     def build_login_req(self, login_req_struct):
         timestamp = str(int(time.time_ns()))
@@ -44,7 +44,7 @@ class SiFT_LOGIN:
 
         return login_req_str.encode(self.coding)
 
-    #MODIFIED FROM ver .5 
+    # MODIFIED FROM ver .5 
     # parses a login request into a dictionary
     def parse_login_req(self, login_req):
         login_req_fields = login_req.decode(self.coding).split(self.delimiter)
@@ -57,14 +57,14 @@ class SiFT_LOGIN:
 
         return login_req_struct
 
-    #MODIFIED from v .5
+    # MODIFIED from v .5
     # builds a login response from a dictionary
     def build_login_res(self, login_res_struct):
         server_random = secrets.token_hex(16)
         login_res_str = f"{login_res_struct['request_hash'].hex()}{self.delimiter}{server_random}"
         return login_res_str.encode(self.coding)
 
-    #MODIFIED from v .5
+    # MODIFIED from v .5
     # parses a login response into a dictionary
     def parse_login_res(self, login_res):
         login_res_fields = login_res.decode(self.coding).split(self.delimiter)
@@ -80,22 +80,22 @@ class SiFT_LOGIN:
         if pwdhash == usr_struct['pwdhash']: return True
         return False
 
-    #To be implemented hopefully...
+    # TODO: Implemet
     def is_duplicate_request(self, login_req_timestamp):
         #To check if the same request was received in another connection (with another client) within the acceptance window
         #Returns boolean
         pass
 
     # handles login process (to be used by the server)
-    # TODO: Use the keys
-    def handle_login_server(self, pubkey, privkey):
+    # MODIFIED (Sike): replaced calls to mtp receive message with more specific mtp receive login request (which uses our generated RSA keys)
+    def handle_login_server(self, private_key_data):
 
         if not self.server_users:
             raise SiFT_LOGIN_Error('User database is required for handling login at server')
 
         # trying to receive a login request
         try:
-            msg_type, msg_payload = self.mtp.receive_msg()
+            msg_type, msg_payload = self.mtp.receive_login_request(private_key_data)
         except SiFT_MTP_Error as e:
             raise SiFT_LOGIN_Error('Unable to receive login request --> ' + e.err_msg)
 
@@ -163,8 +163,11 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the client)
-    # TODO: use the key?
-    def handle_login_client(self, username, password, pubkey):
+    # MODIFIED (Sike): replaced call to mtp send message with more specific mtp send login request (which uses our generated RSA keys)
+    def handle_login_client(self, username, password, public_key_data):
+
+        if not public_key_data:
+            raise SiFT_LOGIN_Error('Client did not send public key')
 
         # building a login request
         login_req_struct = {}
@@ -181,7 +184,7 @@ class SiFT_LOGIN:
 
         # trying to send login request
         try:
-            self.mtp.send_msg(self.mtp.type_login_req, msg_payload)
+            self.mtp.send_login_request(self.mtp.type_login_req, msg_payload, public_key_data)
         except SiFT_MTP_Error as e:
             raise SiFT_LOGIN_Error('Unable to send login request --> ' + e.err_msg)
 
@@ -212,4 +215,3 @@ class SiFT_LOGIN:
         # checking request_hash receiveid in the login response
         if login_res_struct['request_hash'] != request_hash:
             raise SiFT_LOGIN_Error('Verification of login response failed')
-

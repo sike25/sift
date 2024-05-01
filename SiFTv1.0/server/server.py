@@ -57,14 +57,11 @@ class Server:
         loginp.set_server_users(users)
 
         private_key = None 
-        public_key = None   
         with open("privkey.pem", 'rb') as file:
             private_key = file.read()
-        with open("pubkey.pem", 'rb') as file:
-            public_key = file.read()
 
         try:
-            user = loginp.handle_login_server(public_key, private_key)
+            user = loginp.handle_login_server(private_key)
         except SiFT_LOGIN_Error as e:
             print('SiFT_LOGIN_Error: ' + e.err_msg)
             print('Closing connection with client on ' + addr[0] + ':' + str(addr[1]))

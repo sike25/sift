@@ -288,7 +288,6 @@ class SiFT_MTP:
 
 		# verify version, type and replay protection 
 		if parsed_msg_hdr['ver'] != self.msg_hdr_ver:
-			print("SIKE_TEST:", parsed_msg_hdr['ver'] )
 			raise SiFT_MTP_Error('Unsupported version found in message header' + parsed_msg_hdr['ver'])
 		if parsed_msg_hdr['typ'] not in self.msg_types:
 			raise SiFT_MTP_Error('Unknown message type found in message header')

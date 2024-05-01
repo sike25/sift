@@ -3,6 +3,7 @@ The secret key intended for MTP is derived from random numbers that the client a
 to do 
 1. no need to give server access to public key during key generation 
 2. implement key derivation
+3. write readme
 
 after implementation and testing is done
 a. ensure debug and error messages leak nothing to attackers (remove all MTP error messages)

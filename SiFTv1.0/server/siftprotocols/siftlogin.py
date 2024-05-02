@@ -26,6 +26,7 @@ class SiFT_LOGIN:
         # state
         self.mtp = mtp
         self.server_users = None 
+        self.recent_requests = []
 
         # key derivation pieces
         self.client_random = None
@@ -94,12 +95,24 @@ class SiFT_LOGIN:
         pwdhash = PBKDF2(pwd, usr_struct['salt'], len(usr_struct['pwdhash']), count=usr_struct['icount'], hmac_hash_module=SHA256)
         if pwdhash == usr_struct['pwdhash']: return True
         return False
+    
 
-    # TODO: Implemet
-    def is_duplicate_request(self, login_req_timestamp):
-        #To check if the same request was received in another connection (with another client) within the acceptance window
-        #Returns boolean
-        pass
+    # removes requests that are outside the acceptance window to maintain efficiency, called by is_duplicate_request
+    def cleanup_old_requests(self, current_time):
+        self.recent_requests = [(timestamp, message) for timestamp, message in self.recent_requests if abs(current_time - timestamp) < self.acceptance_window]
+
+    # checks if the same request was received in another connection (with another client) within the acceptance window
+    def is_duplicate_request(self, login_req_timestamp, login_request):
+        current_time = time.time()
+        self.cleanup_old_requests(current_time = current_time)
+        
+        for request in self.recent_requests:
+            if request[1] == login_request: # request[1] = message payload for login request
+                return True
+            
+        self.recent_requests.append((login_req_timestamp, login_request))
+        return False
+
 
     # handles login process (to be used by the server)
     # MODIFIED (Sike): replaced calls to mtp receive message with more specific mtp receive login request (which uses our generated RSA keys)
@@ -140,10 +153,9 @@ class SiFT_LOGIN:
             raise SiFT_LOGIN_Error('Login request not fresh')
 
         # Check if the same request was not received within the acceptance window
-        if self.is_duplicate_request(login_req_timestamp):
+        if self.is_duplicate_request(login_req_timestamp, msg_payload):
             raise SiFT_LOGIN_Error('Duplicate login request')
         
-
         # checking username and password
         if login_req_struct['username'] in self.server_users:
             if not self.check_password(login_req_struct['password'], self.server_users[login_req_struct['username']]):
@@ -243,7 +255,6 @@ class SiFT_LOGIN:
         else:
             raise SiFT_LOGIN_Error('Insufficient material for final key derivation')
 
-    
 
     # compute a 32-byte final transfer key for the MTP protocol
     def final_key_derivation(self):

@@ -1,5 +1,5 @@
 to do 
-1. no need to give server access to public key during key generation 
+1. no need to give server access to public key during key generation = done
 2. implement window replay protection in login = done
 3. edit readme
 

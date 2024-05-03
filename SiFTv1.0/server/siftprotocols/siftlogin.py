@@ -21,12 +21,12 @@ class SiFT_LOGIN:
         # constants
         self.delimiter = '\n'
         self.coding = 'utf-8'
-        self.acceptance_window = 2 #seconds
+        self.acceptance_window = 2 # seconds
 
         # state
         self.mtp = mtp
         self.server_users = None 
-        self.recent_requests = []
+        self.recent_requests = [] # list of (timestamp, login_request) tuples
 
         # key derivation pieces
         self.client_random = None
@@ -37,9 +37,8 @@ class SiFT_LOGIN:
     # sets user passwords dictionary (to be used by the server)
     def set_server_users(self, users):
         self.server_users = users
+ 
 
-
-    # MODIFIED FROM ver .5 
     # builds a login request from a dictionary
     def build_login_req(self, login_req_struct):
         timestamp = str(int(time.time_ns()))
@@ -53,7 +52,7 @@ class SiFT_LOGIN:
         self.client_random = bytes.fromhex(client_random)
         return login_req_str.encode(self.coding)
 
-    # MODIFIED FROM ver .5 
+
     # parses a login request into a dictionary
     def parse_login_req(self, login_req):
         login_req_fields = login_req.decode(self.coding).split(self.delimiter)
@@ -67,7 +66,7 @@ class SiFT_LOGIN:
         self.client_random = bytes.fromhex(login_req_struct['client_random'])
         return login_req_struct
 
-    # MODIFIED from v .5
+
     # builds a login response from a dictionary
     def build_login_res(self, login_res_struct):
         server_random = secrets.token_hex(16)
@@ -77,7 +76,7 @@ class SiFT_LOGIN:
         self.request_hash = login_res_struct['request_hash']
         return login_res_str.encode(self.coding)
 
-    # MODIFIED from v .5
+
     # parses a login response into a dictionary
     def parse_login_res(self, login_res):
         login_res_fields = login_res.decode(self.coding).split(self.delimiter)
@@ -89,6 +88,7 @@ class SiFT_LOGIN:
         self.request_hash = login_res_struct['request_hash']
         return login_res_struct
 
+
     # check correctness of a provided password
     def check_password(self, pwd, usr_struct):
 
@@ -97,14 +97,12 @@ class SiFT_LOGIN:
         return False
     
 
-    # removes requests that are outside the acceptance window to maintain efficiency, called by is_duplicate_request
-    def cleanup_old_requests(self, current_time):
-        self.recent_requests = [(timestamp, message) for timestamp, message in self.recent_requests if abs(current_time - timestamp) < self.acceptance_window]
-
     # checks if the same request was received in another connection (with another client) within the acceptance window
     def is_duplicate_request(self, login_req_timestamp, login_request):
         current_time = time.time()
-        self.cleanup_old_requests(current_time = current_time)
+
+        # removes requests that are outside the acceptance window, for efficiency and freshness
+        self.recent_requests = [(timestamp, message) for timestamp, message in self.recent_requests if abs(current_time - timestamp) < self.acceptance_window]
         
         for request in self.recent_requests:
             if request[1] == login_request: # request[1] = message payload for login request
@@ -114,8 +112,8 @@ class SiFT_LOGIN:
         return False
 
 
+
     # handles login process (to be used by the server)
-    # MODIFIED (Sike): replaced calls to mtp receive message with more specific mtp receive login request (which uses our generated RSA keys)
     def handle_login_server(self, private_key_data):
 
         if not self.server_users:
@@ -144,15 +142,13 @@ class SiFT_LOGIN:
 
         login_req_struct = self.parse_login_req(msg_payload)
 
-        #NEW in v 1.0 comparing login req timestamp to current system time
-        current_time = time.time()  # Get current system time as a floating-point number
+        # check if timestamp is within the acceptance window
+        current_time = time.time() 
         login_req_timestamp = login_req_struct['timestamp'] / 1_000_000_000  # Convert nanoseconds to seconds
-
-        # Check if timestamp is within the acceptance window
         if abs(current_time - login_req_timestamp) > self.acceptance_window:
             raise SiFT_LOGIN_Error('Login request not fresh')
 
-        # Check if the same request was not received within the acceptance window
+        # check if the same request was not received within the acceptance window
         if self.is_duplicate_request(login_req_timestamp, msg_payload):
             raise SiFT_LOGIN_Error('Duplicate login request')
         
@@ -196,7 +192,6 @@ class SiFT_LOGIN:
 
 
     # handles login process (to be used by the client)
-    # MODIFIED (Sike): replaced call to mtp send message with more specific mtp send login request (which uses our generated RSA keys)
     def handle_login_client(self, username, password, public_key_data):
 
         if not public_key_data:

@@ -21,7 +21,7 @@ class SiFT_MTP:
 		# constants
 		self.version_major = 1
 		self.version_minor = 0
-		self.msg_hdr_ver = b'\x10\x00'
+		self.msg_hdr_ver = b'\x01\x00'
 		self.size_msg_hdr = 16
 		self.size_msg_hdr_ver = 2
 		self.size_msg_hdr_typ = 2
@@ -29,7 +29,7 @@ class SiFT_MTP:
 		self.size_msg_hdr_sqn = 2
 		self.size_msg_hdr_rnd = 6
 		self.size_msg_hdr_rsv = 2
-		self.size_mac = 16        # MAC size for AES-GCM
+		self.size_mac = 12 
 		self.size_etk = 256
 
 		self.type_login_req =    b'\x00\x00'
@@ -50,8 +50,8 @@ class SiFT_MTP:
 		
 		# state
 		self.peer_socket = peer_socket
-		self.received_sequence_number = 0
-		self.sent_sequence_number = 0
+		self.received_sequence_number = 1
+		self.sent_sequence_number = 1
 
 		self.key = None
 
@@ -114,7 +114,7 @@ class SiFT_MTP:
 			raise SiFT_MTP_Error('Only login requests take a public key argument!')
 		
 		# build message header and collect nonce
-		msg_size = self.size_msg_hdr + len(msg_payload)
+		msg_size = self.size_msg_hdr + len(msg_payload) + self.size_mac + self.size_etk
 		msg_hdr_len = msg_size.to_bytes(self.size_msg_hdr_len, byteorder='big')
 		msg_hdr_sqn = self.sent_sequence_number.to_bytes(self.size_msg_hdr_sqn, byteorder='big')
 		msg_hdr_rnd = get_random_bytes(6)
@@ -133,7 +133,7 @@ class SiFT_MTP:
 		encrypted_temporary_key = cipher.encrypt(temporary_key)
 
 		# encrypt and compute the mac
-		cipher = AES.new(temporary_key, AES.MODE_GCM, nonce = nonce) 
+		cipher = AES.new(temporary_key, AES.MODE_GCM, nonce = nonce, mac_len = self.size_mac) 
 		cipher.update(msg_hdr)
 		ciphertext, mac = cipher.encrypt_and_digest(msg_payload)
 
@@ -142,11 +142,14 @@ class SiFT_MTP:
 
 		# DEBUG 
 		if self.DEBUG:
-			print('MTP message to send (' + str(msg_size) + '):')
+			print('MTP login request to send (' + str(msg_size) + '):')
 			print('HDR (' + str(len(msg_hdr)) + '): ' + msg_hdr.hex())
-			print('BDY (' + str(len(msg_payload)) + '): ')
-			print(msg_payload.hex())
+			print('cipher (' + str(len(ciphertext)) + '): ' + ciphertext.hex())
+			print('mac (' + str(len(mac)) + '): ' + mac.hex())
+			print('etk (' + str(len(encrypted_temporary_key)) + '): ' + encrypted_temporary_key.hex())
+			
 			print('------------------------------------------')
+
 		# DEBUG 
 
 		# try to send
@@ -182,19 +185,20 @@ class SiFT_MTP:
 		nonce = parsed_msg_hdr['sqn'] + parsed_msg_hdr['rnd']
 
 		# collect message body
-		msg_len = int.from_bytes(parsed_msg_hdr['len'], byteorder='big')
-		try:
-			msg_body = self.receive_bytes(msg_len - self.size_msg_hdr)
+		total_message_len = int.from_bytes(parsed_msg_hdr['len'], byteorder='big')
+		epd_len = total_message_len - (self.size_msg_hdr + self.size_mac + self.size_etk)
+		try:	
+			encrypted_payload = self.receive_bytes(epd_len)
 		except SiFT_MTP_Error as e:
-			raise SiFT_MTP_Error('Unable to receive message body --> ' + e.err_msg)
-		
+			raise SiFT_MTP_Error('Unable to receive encrypted payload --> ' + e.err_msg)
+
 		# collect mac
 		try:
 			received_mac = self.receive_bytes(self.size_mac)
 		except SiFT_MTP_Error as e:
 			raise SiFT_MTP_Error('Unable to receive MAC --> ' + e.err_msg)
 
-		# collect encrypted temporary key (etk)
+		# collect etk
 		try:
 			etk = self.receive_bytes(self.size_etk)
 		except SiFT_MTP_Error as e:
@@ -210,27 +214,27 @@ class SiFT_MTP:
 		
 		# decrypt and authenticate the message with the etk
 		try:
-			cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce)
+			cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce, mac_len = self.size_mac)
 			cipher.update(msg_hdr)
-			msg_body = cipher.decrypt_and_verify(msg_body, received_mac)
+			decrypted_payload = cipher.decrypt_and_verify(encrypted_payload, received_mac)
 		except SiFT_MTP_Error as e:
 			raise SiFT_MTP_Error('Decryption or authentication has failed --> ' + e.err_msg)
 
 		# DEBUG 
 		if self.DEBUG:
-			print('MTP message received (' + str(msg_len) + '):')
+			print('MTP login request received (' + str(total_message_len) + '):')
 			print('HDR (' + str(len(msg_hdr)) + '): ' + msg_hdr.hex())
-			print('BDY (' + str(len(msg_body)) + '): ')
-			print(msg_body.hex())
+			print('BDY (' + str(len(decrypted_payload)) + '): ')
+			print(decrypted_payload.hex())
 			print('------------------------------------------')
 		# DEBUG 
 
-		if len(msg_body) != msg_len - self.size_msg_hdr: 
+		if len(decrypted_payload) != epd_len: 
 			raise SiFT_MTP_Error('Incomplete message body received')
 		
 		self.received_sequence_number += 1
 
-		return parsed_msg_hdr['typ'], msg_body
+		return parsed_msg_hdr['typ'], decrypted_payload
 
 
 
@@ -243,7 +247,7 @@ class SiFT_MTP:
 	def send_msg(self, msg_type, msg_payload):
 		
 		# build message header
-		msg_size = self.size_msg_hdr + len(msg_payload)
+		msg_size = self.size_msg_hdr + len(msg_payload) + self.size_mac
 		msg_hdr_len = msg_size.to_bytes(self.size_msg_hdr_len, byteorder='big')
 		msg_hdr_sqn = self.sent_sequence_number.to_bytes(self.size_msg_hdr_sqn, byteorder='big')
 		msg_hdr_rnd = get_random_bytes(6)
@@ -253,7 +257,7 @@ class SiFT_MTP:
 		nonce =  msg_hdr_sqn + msg_hdr_rnd
 
 		# encrypt and compute the mac
-		cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce)
+		cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce, mac_len = self.size_mac)
 		cipher.update(msg_hdr)
 		ciphertext, mac = cipher.encrypt_and_digest(msg_payload)
 
@@ -302,7 +306,7 @@ class SiFT_MTP:
 		# collect message body
 		msg_len = int.from_bytes(parsed_msg_hdr['len'], byteorder='big')
 		try:
-			msg_body = self.receive_bytes(msg_len - self.size_msg_hdr)
+			msg_body = self.receive_bytes(msg_len - (self.size_msg_hdr + self.size_mac))
 		except SiFT_MTP_Error as e:
 			raise SiFT_MTP_Error('Unable to receive message body --> ' + e.err_msg)
 		
@@ -314,7 +318,7 @@ class SiFT_MTP:
 	
 		# decrypt and authenticate the message
 		try:
-			cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce)
+			cipher = AES.new(key = self.key, mode = AES.MODE_GCM, nonce = nonce, mac_len = self.size_mac)
 			cipher.update(msg_hdr)
 			msg_body = cipher.decrypt_and_verify(msg_body, received_mac)
 		except SiFT_MTP_Error as e:
@@ -329,7 +333,9 @@ class SiFT_MTP:
 			print('------------------------------------------')
 		# DEBUG 
 
-		if len(msg_body) != msg_len - self.size_msg_hdr: 
+		if len(msg_body) != (msg_len - (self.size_msg_hdr + self.size_mac)): 
+			print("len of message body", len(msg_body))
+			print("the other length?", (msg_len - (self.size_msg_hdr + self.size_mac)))
 			raise SiFT_MTP_Error('Incomplete message body received')
 		
 		self.received_sequence_number += 1

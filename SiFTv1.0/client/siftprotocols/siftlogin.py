@@ -21,7 +21,7 @@ class SiFT_LOGIN:
         # constants
         self.delimiter = '\n'
         self.coding = 'utf-8'
-        self.acceptance_window = 2 # seconds
+        self.acceptance_window = 2000000000 # seconds
 
         # state
         self.mtp = mtp

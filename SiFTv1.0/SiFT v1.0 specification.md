@@ -214,8 +214,6 @@ When receiving the login response, the client must verify that the request hash 
 
 If all verifications were successful, then both the client and the server compute a 32-byte final transfer key for the MTP protocol from the concatenation of the client_random and the server_random as initial key material, and the request_hash as salt using the HKDF key derivation function with SHA-256 as the internal hash function. The derived final transfer key is passed to the MTP protocol entity such that all subsequent MTP messages must be protected by this key.
 
-**Sike's Note: Implemented Up to Here. Is that all?**
-
 ## SiFT v1.0 Commands Protocol
 The SiFT v1.0 Commands Protocol is responsible for sending the file commands of the client to the server and sending response messages to these commands. The Commands Protocol must only be used after successful login by the client to the server, and establishment of the final MTP transfer key, such that commands and their responses are protected cryptographically by MTP.
 

@@ -1,11 +1,11 @@
 # Simple File Transfer Protocol (SiFT)
 
 ## Authors
-- Zehra Gundogdu
 - Sike Ogieva
+- Zehra Gundogdu
 
 ## Introduction
-This document outlines the implementation details of the Simple File Transfer Protocol (SiFT), a secure protocol designed for transferring files between a client and a server. We implement SiFT v1.0 by extending SiFT v0.5 to provide protection from eavesdropping, modification, deletion, injection and replay of messages sent by the parties, by cryptographically securing the message transfer sub-protocol.
+This document outlines the implementation details of the Simple File Transfer Protocol (SiFT), a secure protocol designed for transferring files between a client and a server. We implement SiFT v1.0 to provide protection from eavesdropping, modification, deletion, injection and replay of messages sent by the parties, by cryptographically securing the message transfer sub-protocol.
 
 ## Implementation
 - **RSA Key Pair Generation:**
